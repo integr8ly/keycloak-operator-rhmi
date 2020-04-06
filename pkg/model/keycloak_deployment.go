@@ -15,8 +15,9 @@ import (
 const (
 	LivenessProbeInitialDelay  = 30
 	ReadinessProbeInitialDelay = 40
-	//10s (cli) + 10s (curl) + 2s (just in case)
-	ProbeTimeoutSeconds = 22
+	//10s (curl) + 10s (curl) + 2s (just in case)
+	ProbeTimeoutSeconds         = 45
+	ProbeTimeBetweenRunsSeconds = 30
 )
 
 func GetServiceEnvVar(suffix string) string {
@@ -314,6 +315,9 @@ func livenessProbe() *v1.Probe {
 	return &v1.Probe{
 		InitialDelaySeconds: LivenessProbeInitialDelay,
 		TimeoutSeconds:      ProbeTimeoutSeconds,
+		PeriodSeconds:       ProbeTimeBetweenRunsSeconds,
+		SuccessThreshold:    1,
+		FailureThreshold:    5,
 		Handler: v1.Handler{
 			Exec: &v1.ExecAction{
 				Command: []string{
@@ -330,6 +334,9 @@ func readinessProbe() *v1.Probe {
 	return &v1.Probe{
 		InitialDelaySeconds: ReadinessProbeInitialDelay,
 		TimeoutSeconds:      ProbeTimeoutSeconds,
+		PeriodSeconds:       ProbeTimeBetweenRunsSeconds,
+		SuccessThreshold:    1,
+		FailureThreshold:    5,
 		Handler: v1.Handler{
 			Exec: &v1.ExecAction{
 				Command: []string{
