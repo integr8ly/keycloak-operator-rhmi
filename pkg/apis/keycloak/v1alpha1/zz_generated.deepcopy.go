@@ -277,6 +277,21 @@ func (in *KeycloakAPIUser) DeepCopyInto(out *KeycloakAPIUser) {
 		*out = make([]KeycloakCredential, len(*in))
 		copy(*out, *in)
 	}
+	if in.Attributes != nil {
+		in, out := &in.Attributes, &out.Attributes
+		*out = make(map[string][]string, len(*in))
+		for key, val := range *in {
+			var outVal []string
+			if val == nil {
+				(*out)[key] = nil
+			} else {
+				in, out := &val, &outVal
+				*out = make([]string, len(*in))
+				copy(*out, *in)
+			}
+			(*out)[key] = outVal
+		}
+	}
 	return
 }
 
@@ -311,7 +326,7 @@ func (in *KeycloakBackup) DeepCopyInto(out *KeycloakBackup) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
 	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
-	out.Spec = in.Spec
+	in.Spec.DeepCopyInto(&out.Spec)
 	in.Status.DeepCopyInto(&out.Status)
 	return
 }
@@ -371,6 +386,11 @@ func (in *KeycloakBackupList) DeepCopyObject() runtime.Object {
 func (in *KeycloakBackupSpec) DeepCopyInto(out *KeycloakBackupSpec) {
 	*out = *in
 	out.AWS = in.AWS
+	if in.InstanceSelector != nil {
+		in, out := &in.InstanceSelector, &out.InstanceSelector
+		*out = new(v1.LabelSelector)
+		(*in).DeepCopyInto(*out)
+	}
 	return
 }
 

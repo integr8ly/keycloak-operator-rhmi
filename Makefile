@@ -2,15 +2,15 @@
 NAMESPACE=keycloak
 PROJECT=keycloak-operator
 PKG=github.com/keycloak/keycloak-operator
-OPERATOR_SDK_VERSION=v0.12.1
+OPERATOR_SDK_VERSION=v0.15.1
 OPERATOR_SDK_DOWNLOAD_URL=https://github.com/operator-framework/operator-sdk/releases/download/$(OPERATOR_SDK_VERSION)/operator-sdk-$(OPERATOR_SDK_VERSION)-x86_64-linux-gnu
-MINIKUBE_DOWNLOAD_URL=https://storage.googleapis.com/minikube/releases/v1.4.0/minikube-linux-amd64
-KUBECTL_DOWNLOAD_URL=https://storage.googleapis.com/kubernetes-release/release/v1.16.0/bin/linux/amd64/kubectl
+MINIKUBE_DOWNLOAD_URL=https://github.com/kubernetes/minikube/releases/download/v1.9.2/minikube-linux-amd64
+KUBECTL_DOWNLOAD_URL=https://storage.googleapis.com/kubernetes-release/release/v1.18.0/bin/linux/amd64/kubectl
 
 # Compile constants
 COMPILE_TARGET=./tmp/_output/bin/$(PROJECT)
-GOOS=linux
-GOARCH=amd64
+GOOS=${GOOS:-${GOHOSTOS}}
+GOARCH=${GOACH:-${GOHOSTARCH}}
 CGO_ENABLED=0
 
 ##############################
@@ -57,7 +57,13 @@ test/e2e: cluster/prepare
 	# is that Operator testing harness downloads things manually using `go mod` when executing the tests.
 	# Here is a corresponding Operator SDK call:
 	# operator-sdk test  local --go-test-flags "-tags=integration -coverpkg ./... -coverprofile cover-e2e.coverprofile -covermode=count" --namespace ${NAMESPACE} --up-local --debug --verbose ./test/e2e
-	go test -tags=integration -coverpkg ./... -coverprofile cover-e2e.coverprofile -covermode=count -mod=vendor ./test/e2e/... -root=$(PWD) -kubeconfig=$(HOME)/.kube/config -globalMan deploy/empty-init.yaml -namespacedMan deploy/empty-init.yaml -v -singleNamespace -parallel=1 -localOperator
+	go test -tags=integration -coverpkg ./... -coverprofile cover-e2e.coverprofile -covermode=count -mod=vendor ./test/e2e/... -root=$(PWD) -kubeconfig=$(HOME)/.kube/config -globalMan deploy/empty-init.yaml -namespacedMan deploy/empty-init.yaml -test.v -singleNamespace -parallel=1 -localOperator -test.timeout 0
+
+.PHONY: test/e2e-image
+test/e2e-image:
+	@echo Running tests with operator as an image in the cluster:
+	# Doesn't need cluster/prepare as it's done by operator-sdk. Uses a randomly generated namespace (instead of keycloak namespace) to support parallel test runs.
+	operator-sdk test local ./test/e2e --go-test-flags "-tags=integration -coverpkg ./... -coverprofile cover-e2e.coverprofile -covermode=count" --debug --verbose
 
 .PHONY: test/coverage/prepare
 test/coverage/prepare:
@@ -108,7 +114,10 @@ code/compile:
 .PHONY: code/gen
 code/gen:
 	operator-sdk generate k8s
-	operator-sdk generate openapi
+	operator-sdk generate crds
+	# This is a copy-paste part of `operator-sdk generate openapi` command (suggested by the manual)
+	which ./bin/openapi-gen > /dev/null || go build -o ./bin/openapi-gen k8s.io/kube-openapi/cmd/openapi-gen
+	./bin/openapi-gen --logtostderr=true -o "" -i ./pkg/apis/keycloak/v1alpha1 -O zz_generated.openapi -p ./pkg/apis/keycloak/v1alpha1 -h ./hack/boilerplate.go.txt -r "-"
 
 .PHONY: code/check
 code/check:
@@ -143,8 +152,10 @@ setup/travis:
 	@echo Booting Minikube up, see Travis env. variables for more information
 	@mkdir -p $HOME/.kube $HOME/.minikube
 	@touch $KUBECONFIG
-	@sudo minikube start --vm-driver=none --kubernetes-version=v1.16.0
+	@sudo minikube start --vm-driver=none
 	@sudo chown -R travis: /home/travis/.minikube/
+	sudo ./hack/modify_etc_hosts.sh "keycloak.local"
+	@sudo minikube addons enable ingress
 
 .PHONY: test/goveralls
 test/goveralls: test/coverage/prepare
